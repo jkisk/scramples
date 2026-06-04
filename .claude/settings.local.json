@@ -1,0 +1,14 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(gh repo *)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "WebFetch(domain:github.com)",
+      "WebFetch(domain:api.github.com)",
+      "Bash(curl -s https://raw.githubusercontent.com/jkisk/capstone-backend/master/readme.md)",
+      "Bash(curl -sL \"https://raw.githubusercontent.com/dolph/dictionary/master/enable1.txt\")",
+      "Bash(grep -E \"^[a-z]{3,9}$\")",
+      "Bash(npx tsc *)"
+    ]
+  }
+}

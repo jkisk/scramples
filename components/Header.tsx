@@ -32,11 +32,12 @@ export function Header({ onHome, onShuffle }: HeaderProps) {
       </button>
       <Image
         className="brand-mini"
-        src="/logo.png"
+        src="/scramples/logo.png"
         alt="Scramples"
         width={200}
         height={60}
         style={{ height: 30, width: "auto" }}
+        loading="eager"
       />
       <button className="iconbtn" onClick={onShuffle} title="Shuffle">
         <IconShuffle />

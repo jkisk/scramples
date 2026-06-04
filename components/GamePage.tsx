@@ -2,8 +2,8 @@
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
-import { makeTiles, shuffled, GAME_DURATION_SECONDS, Tile } from "@/lib/game";
-import { isValidWord, scoreWord } from "@/lib/words";
+import { makeTiles, shuffled, generateLetters, scoreWord, GAME_DURATION_SECONDS, Tile } from "@/lib/game";
+import { loadWordList, isValidDictionaryWord } from "@/lib/words";
 import { Header } from "./Header";
 import { LetterTiles } from "./LetterTiles";
 import { WordBuilder } from "./WordBuilder";
@@ -12,7 +12,7 @@ import { FoundWords, FoundWord } from "./FoundWords";
 import { PostGame } from "./PostGame";
 
 type Theme = "candy" | "neon" | "paper";
-type Screen = "home" | "play" | "results";
+type Screen = "home" | "loading" | "play" | "results";
 
 interface GameResult {
   score: number;
@@ -22,17 +22,25 @@ interface GameResult {
 export function GamePage() {
   const [theme, setTheme] = useState<Theme>("candy");
   const [screen, setScreen] = useState<Screen>("home");
-  const [tiles, setTiles] = useState<Tile[]>(() => makeTiles());
+  const [tiles, setTiles] = useState<Tile[]>([]);
   const [result, setResult] = useState<GameResult | null>(null);
 
   useEffect(() => {
     document.body.setAttribute("data-theme", theme);
   }, [theme]);
 
-  const startGame = () => {
-    setTiles(shuffled(makeTiles()));
+  async function startGame() {
+    setScreen("loading");
+    try {
+      await loadWordList();
+    } catch {
+      setScreen("home");
+      return;
+    }
+    const letters = generateLetters(9);
+    setTiles(shuffled(makeTiles(letters)));
     setScreen("play");
-  };
+  }
 
   const endGame = (r: GameResult) => {
     setResult(r);
@@ -43,6 +51,11 @@ export function GamePage() {
     <div className="app">
       {screen === "home" && (
         <HomeScreen onPlay={startGame} theme={theme} onThemeChange={setTheme} />
+      )}
+      {screen === "loading" && (
+        <div className="stage" style={{ justifyContent: "center", minHeight: "60vh" }}>
+          <div className="found-empty" style={{ fontSize: 28 }}>Loading…</div>
+        </div>
       )}
       {screen === "play" && (
         <PlayScreen
@@ -78,12 +91,13 @@ function HomeScreen({
   return (
     <div className="stage home">
       <Image
-        src="/logo.png"
+        src="/scramples/logo.png"
         alt="Scramples"
         width={480}
         height={100}
         className="brandLogo"
         style={{ height: "auto" }}
+        loading="eager"
       />
       <p className="home-sub">
         Nine letters. Ninety seconds. How many words can you dig out before the clock runs dry?
@@ -210,7 +224,7 @@ function PlayScreen({
       flashToast("bad", "Already found");
       return;
     }
-    if (!isValidWord(word)) {
+    if (!isValidDictionaryWord(word)) {
       setShake(true); setTimeout(() => setShake(false), 400);
       flashToast("bad", "Not a word");
       return;
