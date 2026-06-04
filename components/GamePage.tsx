@@ -1,198 +1,298 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
-import {
-  Stack,
-  Title,
-  Button,
-  Group,
-  Text,
-  Paper,
-  Center,
-  Loader,
-} from "@mantine/core";
-import { notifications } from "@mantine/notifications";
-import { useDisclosure } from "@mantine/hooks";
+import { useState, useEffect, useRef, useCallback } from "react";
+import Image from "next/image";
+import { makeTiles, shuffled, GAME_DURATION_SECONDS, Tile } from "@/lib/game";
+import { isValidWord, scoreWord } from "@/lib/words";
 import { Header } from "./Header";
 import { LetterTiles } from "./LetterTiles";
-import { WordInput } from "./WordInput";
+import { WordBuilder } from "./WordBuilder";
 import { Timer } from "./Timer";
-import { FoundWords } from "./FoundWords";
+import { FoundWords, FoundWord } from "./FoundWords";
 import { PostGame } from "./PostGame";
-import { HelpModal } from "./HelpModal";
-import { loadWordList, isValidDictionaryWord, canFormFromLetters } from "@/lib/words";
-import { generateLetters, scoreWord, GAME_DURATION_SECONDS } from "@/lib/game";
-import { getPersonalBest, savePersonalBest } from "@/lib/storage";
 
-type GameState = "idle" | "loading" | "playing" | "finished";
+type Theme = "candy" | "neon" | "paper";
+type Screen = "home" | "play" | "results";
+
+interface GameResult {
+  score: number;
+  found: FoundWord[];
+}
 
 export function GamePage() {
-  const [gameState, setGameState] = useState<GameState>("idle");
-  const [letters, setLetters] = useState<string[]>([]);
-  const [foundWords, setFoundWords] = useState<Map<string, number>>(new Map());
-  const [score, setScore] = useState(0);
-  const [timeRemaining, setTimeRemaining] = useState(GAME_DURATION_SECONDS);
-  const [personalBest, setPersonalBest] = useState(0);
-  const [isNewRecord, setIsNewRecord] = useState(false);
-  const [currentInput, setCurrentInput] = useState("");
-  const [helpOpened, { open: openHelp, close: closeHelp }] = useDisclosure(false);
-
-  const scoreRef = useRef(0);
+  const [theme, setTheme] = useState<Theme>("candy");
+  const [screen, setScreen] = useState<Screen>("home");
+  const [tiles, setTiles] = useState<Tile[]>(() => makeTiles());
+  const [result, setResult] = useState<GameResult | null>(null);
 
   useEffect(() => {
-    setPersonalBest(getPersonalBest());
+    document.body.setAttribute("data-theme", theme);
+  }, [theme]);
+
+  const startGame = () => {
+    setTiles(shuffled(makeTiles()));
+    setScreen("play");
+  };
+
+  const endGame = (r: GameResult) => {
+    setResult(r);
+    setScreen("results");
+  };
+
+  return (
+    <div className="app">
+      {screen === "home" && (
+        <HomeScreen onPlay={startGame} theme={theme} onThemeChange={setTheme} />
+      )}
+      {screen === "play" && (
+        <PlayScreen
+          tiles={tiles}
+          setTiles={setTiles}
+          onEnd={endGame}
+          onHome={() => setScreen("home")}
+        />
+      )}
+      {screen === "results" && result && (
+        <PostGame
+          score={result.score}
+          found={result.found}
+          onPlayAgain={startGame}
+          onHome={() => setScreen("home")}
+        />
+      )}
+    </div>
+  );
+}
+
+// ── Home Screen ───────────────────────────────────────────────────────────────
+
+function HomeScreen({
+  onPlay,
+  theme,
+  onThemeChange,
+}: {
+  onPlay: () => void;
+  theme: Theme;
+  onThemeChange: (t: Theme) => void;
+}) {
+  return (
+    <div className="stage home">
+      <Image
+        src="/logo.png"
+        alt="Scramples"
+        width={480}
+        height={100}
+        className="brandLogo"
+        style={{ height: "auto" }}
+      />
+      <p className="home-sub">
+        Nine letters. Ninety seconds. How many words can you dig out before the clock runs dry?
+      </p>
+      <button className="btn big" onClick={onPlay}>
+        Play ▸
+      </button>
+
+      <div className="card" style={{ marginTop: 6 }}>
+        <div className="rules">
+          <div>
+            <h3>◆ How to play</h3>
+            <ul>
+              <li>
+                <span className="dot" />
+                <span>Build words from the nine letters — at least <b>3 letters</b> long.</span>
+              </li>
+              <li>
+                <span className="dot" />
+                <span>Use each letter only as many times as it appears.</span>
+              </li>
+              <li>
+                <span className="dot" />
+                <span>Tap tiles or type letters. Hit <b>Enter</b> to lock in a word.</span>
+              </li>
+            </ul>
+          </div>
+          <div>
+            <h3>◆ Scoring</h3>
+            <div className="score-table">
+              <div className="score-row"><span>3 letters</span><span className="pts">1</span></div>
+              <div className="score-row"><span>4 letters</span><span className="pts">2</span></div>
+              <div className="score-row"><span>5 letters</span><span className="pts">4</span></div>
+              <div className="score-row"><span>6 letters</span><span className="pts">6</span></div>
+              <div className="score-row"><span>7+ letters</span><span className="pts">10</span></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <div className="theme-picker">
+        {(["candy", "neon", "paper"] as Theme[]).map((t) => (
+          <button
+            key={t}
+            className={`theme-btn${theme === t ? " active" : ""}`}
+            onClick={() => onThemeChange(t)}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Play Screen ───────────────────────────────────────────────────────────────
+
+function PlayScreen({
+  tiles,
+  setTiles,
+  onEnd,
+  onHome,
+}: {
+  tiles: Tile[];
+  setTiles: React.Dispatch<React.SetStateAction<Tile[]>>;
+  onEnd: (result: GameResult) => void;
+  onHome: () => void;
+}) {
+  const [selected, setSelected] = useState<number[]>([]);
+  const selectedRef = useRef<number[]>([]);
+  const applySel = (next: number[]) => {
+    selectedRef.current = next;
+    setSelected(next);
+  };
+
+  const [found, setFound] = useState<FoundWord[]>([]);
+  const [score, setScore] = useState(0);
+  const [time, setTime] = useState(GAME_DURATION_SECONDS);
+  const [toast, setToast] = useState<{ type: "good" | "bad"; text: string } | null>(null);
+  const [shake, setShake] = useState(false);
+  const [goodFlash, setGoodFlash] = useState(false);
+  const [floatPts, setFloatPts] = useState<{ pts: number; key: number } | null>(null);
+
+  const endedRef = useRef(false);
+  const foundRef = useRef<FoundWord[]>([]);
+  foundRef.current = found;
+  const scoreRef = useRef(0);
+  scoreRef.current = score;
+
+  useEffect(() => {
+    const t = setInterval(() => {
+      setTime((v) => {
+        if (v <= 1) { clearInterval(t); return 0; }
+        return v - 1;
+      });
+    }, 1000);
+    return () => clearInterval(t);
   }, []);
 
   useEffect(() => {
-    if (gameState !== "playing") return;
-    const interval = setInterval(() => {
-      setTimeRemaining((prev) => {
-        if (prev <= 1) {
-          setGameState("finished");
-          return 0;
-        }
-        return prev - 1;
-      });
-    }, 1000);
-    return () => clearInterval(interval);
-  }, [gameState]);
+    if (time === 0 && !endedRef.current) {
+      endedRef.current = true;
+      setTimeout(() => onEnd({ score: scoreRef.current, found: foundRef.current }), 350);
+    }
+  }, [time, onEnd]);
+
+  const byId = (id: number) => tiles.find((t) => t.id === id);
+
+  const flashToast = (type: "good" | "bad", text: string) => {
+    setToast({ type, text });
+    setTimeout(() => setToast(null), 900);
+  };
+
+  const submit = useCallback(() => {
+    const ids = selectedRef.current;
+    const word = ids.map((id) => byId(id)?.char ?? "").join("").toLowerCase();
+    if (word.length < 3) {
+      setShake(true); setTimeout(() => setShake(false), 400);
+      flashToast("bad", "Too short");
+      return;
+    }
+    if (foundRef.current.some((f) => f.word === word)) {
+      setShake(true); setTimeout(() => setShake(false), 400);
+      flashToast("bad", "Already found");
+      return;
+    }
+    if (!isValidWord(word)) {
+      setShake(true); setTimeout(() => setShake(false), 400);
+      flashToast("bad", "Not a word");
+      return;
+    }
+    const pts = scoreWord(word.length);
+    setFound((f) => [{ word, pts }, ...f]);
+    setScore((s) => s + pts);
+    setGoodFlash(true); setTimeout(() => setGoodFlash(false), 350);
+    flashToast("good", word.length >= 7 ? "Scramazing!" : word.length >= 5 ? "Nice!" : "+" + pts);
+    setFloatPts({ pts, key: Date.now() });
+    setTimeout(() => setFloatPts(null), 900);
+    applySel([]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tiles]);
+
+  const tapTile = (id: number) => {
+    const sel = selectedRef.current;
+    applySel(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
+  };
+  const tapTray = (id: number) => applySel(selectedRef.current.filter((x) => x !== id));
+  const clearWord = () => applySel([]);
+  const doShuffle = () => setTiles((ts) => shuffled([...ts]));
 
   useEffect(() => {
-    if (gameState !== "finished") return;
-    const newRecord = savePersonalBest(scoreRef.current);
-    setIsNewRecord(newRecord);
-    setPersonalBest(getPersonalBest());
-  }, [gameState]);
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Enter") { e.preventDefault(); submit(); return; }
+      if (e.key === "Backspace") { e.preventDefault(); applySel(selectedRef.current.slice(0, -1)); return; }
+      if (e.key === "Escape") { clearWord(); return; }
+      const k = e.key.toUpperCase();
+      if (/^[A-Z]$/.test(k)) {
+        const sel = selectedRef.current;
+        const avail = tiles.find((tl) => tl.char === k && !sel.includes(tl.id));
+        if (avail) applySel([...sel, avail.id]);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [tiles, submit]);
 
-  async function startGame() {
-    setGameState("loading");
-    try {
-      await loadWordList();
-    } catch {
-      notifications.show({ message: "Failed to load word list", color: "red" });
-      setGameState("idle");
-      return;
-    }
-    scoreRef.current = 0;
-    setLetters(generateLetters(9));
-    setFoundWords(new Map());
-    setScore(0);
-    setTimeRemaining(GAME_DURATION_SECONDS);
-    setIsNewRecord(false);
-    setCurrentInput("");
-    setGameState("playing");
-  }
-
-  function handleWordSubmit(word: string) {
-    const w = word.toLowerCase();
-
-    if (foundWords.has(w)) {
-      notifications.show({ message: "Already found!", color: "yellow", autoClose: 1500 });
-      return;
-    }
-    if (!canFormFromLetters(w, letters)) {
-      notifications.show({ message: "Letters not available", color: "red", autoClose: 1500 });
-      return;
-    }
-    if (!isValidDictionaryWord(w)) {
-      notifications.show({ message: "Not a valid word", color: "red", autoClose: 1500 });
-      return;
-    }
-
-    const pts = scoreWord(w);
-    const newScore = scoreRef.current + pts;
-    scoreRef.current = newScore;
-    setScore(newScore);
-    setFoundWords((prev) => new Map(prev).set(w, pts));
-    notifications.show({
-      message: `+${pts} point${pts !== 1 ? "s" : ""}!`,
-      color: "green",
-      autoClose: 1000,
-    });
-  }
+  const warn = time <= 15;
+  const mm = Math.floor(time / 60);
+  const ss = String(time % 60).padStart(2, "0");
 
   return (
-    <>
-      <HelpModal opened={helpOpened} onClose={closeHelp} />
-      <Stack gap={0} style={{ minHeight: "100vh" }}>
-        <Header personalBest={personalBest} onHelpClick={openHelp} />
+    <div className="stage play">
+      <Header onHome={onHome} onShuffle={doShuffle} />
 
-        <Center style={{ flex: 1, padding: "2rem" }}>
-          {gameState === "idle" && (
-            <Stack align="center" gap="xl">
-              <div style={{ overflow: "hidden", height: 54 }}>
-                <img src="/logo.png" alt="Scramples" style={{ width: 480, display: "block" }} />
-              </div>
-              {personalBest > 0 && (
-                <Text size="lg" fw={600} style={{ color: "#6b09b7" }}>
-                  Personal Best: {personalBest} points
-                </Text>
-              )}
-              <Button
-                size="xl"
-                onClick={startGame}
-                style={{ "--button-bg": "#ff3d02", "--button-hover": "#e03500", minWidth: 200, fontSize: "1.2rem" } as React.CSSProperties}
-              >
-                Play
-              </Button>
-              <Button variant="subtle" color="violet" onClick={openHelp}>
-                How to Play
-              </Button>
-            </Stack>
-          )}
+      <div className="scorebar">
+        <div className="stat">
+          <div className="label">Score</div>
+          <div className="val grad">{score}</div>
+        </div>
+        <div className="stat">
+          <div className="label">Words</div>
+          <div className="val">{found.length}</div>
+        </div>
+        <div className={`stat timer${warn ? " warn" : ""}`}>
+          <div className="label">Time</div>
+          <div className="val">{mm}:{ss}</div>
+        </div>
+      </div>
 
-          {gameState === "loading" && (
-            <Stack align="center" gap="md">
-              <Loader color="violet" size="xl" />
-              <Text c="dimmed">Loading word list…</Text>
-            </Stack>
-          )}
+      <Timer seconds={time} total={GAME_DURATION_SECONDS} />
 
-          {gameState === "playing" && (
-            <Stack align="center" gap="lg" w="100%" maw={600}>
-              <Group justify="space-between" w="100%" align="center">
-                <Timer seconds={timeRemaining} total={GAME_DURATION_SECONDS} />
-                <Paper
-                  p="md"
-                  style={{ backgroundColor: "#f0a7e8", textAlign: "center", minWidth: 110 }}
-                >
-                  <Text size="sm" c="dimmed" fw={600}>
-                    Score
-                  </Text>
-                  <Title order={2} style={{ color: "#6b09b7" }}>
-                    {score}
-                  </Title>
-                </Paper>
-              </Group>
+      <WordBuilder
+        tiles={tiles}
+        selected={selected}
+        onTrayTap={tapTray}
+        shake={shake}
+        goodFlash={goodFlash}
+        toast={toast}
+        floatPts={floatPts}
+      />
 
-              <LetterTiles letters={letters} currentInput={currentInput} />
+      <LetterTiles tiles={tiles} selected={selected} onTap={tapTile} />
 
-              <WordInput
-                onSubmit={handleWordSubmit}
-                onInputChange={setCurrentInput}
-                disabled={gameState !== "playing"}
-              />
+      <div className="controls">
+        <button className="btn ghost sm" onClick={clearWord}>Clear</button>
+        <button className="btn" onClick={submit}>Enter ↵</button>
+      </div>
 
-              <Paper p="md" w="100%" style={{ backgroundColor: "#f0a7e8" }}>
-                <Text fw={700} mb="xs" style={{ color: "#6b09b7" }}>
-                  Found Words ({foundWords.size})
-                </Text>
-                <FoundWords words={foundWords} />
-              </Paper>
-            </Stack>
-          )}
-
-          {gameState === "finished" && (
-            <PostGame
-              score={score}
-              personalBest={personalBest}
-              isNewRecord={isNewRecord}
-              foundWords={foundWords}
-              onPlayAgain={startGame}
-            />
-          )}
-        </Center>
-      </Stack>
-    </>
+      <FoundWords words={found} />
+    </div>
   );
 }

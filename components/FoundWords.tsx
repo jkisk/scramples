@@ -1,36 +1,32 @@
 "use client";
 
-import { Group, Text, Badge, ScrollArea, Stack } from "@mantine/core";
+export interface FoundWord {
+  word: string;
+  pts: number;
+}
 
 interface FoundWordsProps {
-  words: Map<string, number>;
+  words: FoundWord[];
 }
 
 export function FoundWords({ words }: FoundWordsProps) {
-  if (words.size === 0) {
-    return (
-      <Text c="dimmed" ta="center" size="sm">
-        No words found yet
-      </Text>
-    );
-  }
-
-  const entries = Array.from(words.entries()).sort((a, b) => b[1] - a[1] || a[0].localeCompare(b[0]));
-
   return (
-    <ScrollArea h={180}>
-      <Stack gap={6}>
-        {entries.map(([word, pts]) => (
-          <Group key={word} justify="space-between" px="xs">
-            <Text tt="uppercase" fw={600} style={{ color: "#6b09b7" }}>
-              {word}
-            </Text>
-            <Badge color="violet" variant="filled">
-              +{pts}
-            </Badge>
-          </Group>
-        ))}
-      </Stack>
-    </ScrollArea>
+    <div className="card">
+      <div className="found-head">
+        <h3>Found words</h3>
+        <h3 style={{ color: "var(--accent)" }}>{words.length}</h3>
+      </div>
+      <div className="found-list">
+        {words.length === 0 ? (
+          <span className="found-empty">nothing yet — go find some!</span>
+        ) : (
+          words.map((f, i) => (
+            <span key={i} className={`chip${f.word.length >= 7 ? " big7" : ""}`}>
+              {f.word.toUpperCase()} <span className="cpts">+{f.pts}</span>
+            </span>
+          ))
+        )}
+      </div>
+    </div>
   );
 }

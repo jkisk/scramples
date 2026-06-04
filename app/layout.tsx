@@ -1,12 +1,9 @@
 import type { Metadata } from "next";
-import { Open_Sans } from "next/font/google";
 import { ColorSchemeScript, mantineHtmlProps } from "@mantine/core";
 import { Providers } from "./providers";
 import "@mantine/core/styles.css";
 import "@mantine/notifications/styles.css";
 import "./globals.css";
-
-const openSans = Open_Sans({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Scramples",
@@ -23,7 +20,7 @@ export default function RootLayout({
       <head>
         <ColorSchemeScript />
       </head>
-      <body className={openSans.className}>
+      <body data-theme="candy">
         <Providers>{children}</Providers>
       </body>
     </html>
