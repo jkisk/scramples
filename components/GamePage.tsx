@@ -99,10 +99,7 @@ function HomeScreen({
         style={{ height: "auto" }}
         loading="eager"
       />
-      <p className="home-sub">
-        Nine letters. Ninety seconds. How many words can you dig out before the clock runs dry?
-      </p>
-      <button className="btn big" onClick={onPlay}>
+<button className="btn big" onClick={onPlay}>
         Play ▸
       </button>
 
