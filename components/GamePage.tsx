@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import Image from "next/image";
 import { makeTiles, shuffled, generateLetters, scoreWord, GAME_DURATION_SECONDS, Tile } from "@/lib/game";
 import { loadWordList, isValidDictionaryWord } from "@/lib/words";
+import { assetPath } from "@/lib/paths";
+import { getPersonalBest, savePersonalBest } from "@/lib/storage";
 import { Header } from "./Header";
 import { LetterTiles } from "./LetterTiles";
 import { WordBuilder } from "./WordBuilder";
@@ -12,11 +14,13 @@ import { FoundWords, FoundWord } from "./FoundWords";
 import { PostGame } from "./PostGame";
 
 type Theme = "candy" | "neon" | "paper";
-type Screen = "home" | "loading" | "play" | "results";
+type Screen = "home" | "loading" | "play" | "results" | "error";
 
 interface GameResult {
   score: number;
   found: FoundWord[];
+  personalBest: number;
+  isNewBest: boolean;
 }
 
 export function GamePage() {
@@ -29,23 +33,33 @@ export function GamePage() {
     document.body.setAttribute("data-theme", theme);
   }, [theme]);
 
-  async function startGame() {
+  useEffect(() => {
+    void loadWordList().catch(() => undefined);
+  }, []);
+
+  const startGame = useCallback(async () => {
     setScreen("loading");
     try {
       await loadWordList();
     } catch {
-      setScreen("home");
+      setScreen("error");
       return;
     }
     const letters = generateLetters(9);
     setTiles(shuffled(makeTiles(letters)));
     setScreen("play");
-  }
+  }, []);
 
-  const endGame = (r: GameResult) => {
-    setResult(r);
+  const endGame = useCallback((r: Omit<GameResult, "personalBest" | "isNewBest">) => {
+    const previousBest = getPersonalBest();
+    const isNewBest = savePersonalBest(r.score);
+    setResult({
+      ...r,
+      personalBest: Math.max(previousBest, r.score),
+      isNewBest,
+    });
     setScreen("results");
-  };
+  }, []);
 
   return (
     <div className="app">
@@ -55,6 +69,27 @@ export function GamePage() {
       {screen === "loading" && (
         <div className="stage" style={{ justifyContent: "center", minHeight: "60vh" }}>
           <div className="found-empty" style={{ fontSize: 28 }}>Loading…</div>
+        </div>
+      )}
+      {screen === "error" && (
+        <div className="stage home">
+          <Image
+            src={assetPath("/logo.png")}
+            alt="Scramples"
+            width={480}
+            height={100}
+            className="brandLogo"
+            style={{ height: "auto" }}
+            loading="eager"
+          />
+          <div className="card">
+            <div className="found-empty" style={{ textAlign: "center" }}>
+              Could not load the word list.
+            </div>
+          </div>
+          <button className="btn big" onClick={startGame}>
+            Retry
+          </button>
         </div>
       )}
       {screen === "play" && (
@@ -69,6 +104,8 @@ export function GamePage() {
         <PostGame
           score={result.score}
           found={result.found}
+          personalBest={result.personalBest}
+          isNewBest={result.isNewBest}
           onPlayAgain={startGame}
           onHome={() => setScreen("home")}
         />
@@ -91,7 +128,7 @@ function HomeScreen({
   return (
     <div className="stage home">
       <Image
-        src="/scramples/logo.png"
+        src={assetPath("/logo.png")}
         alt="Scramples"
         width={480}
         height={100}
@@ -99,7 +136,7 @@ function HomeScreen({
         style={{ height: "auto" }}
         loading="eager"
       />
-<button className="btn big" onClick={onPlay}>
+      <button className="btn big" onClick={onPlay}>
         Play ▸
       </button>
 
@@ -160,15 +197,15 @@ function PlayScreen({
 }: {
   tiles: Tile[];
   setTiles: React.Dispatch<React.SetStateAction<Tile[]>>;
-  onEnd: (result: GameResult) => void;
+  onEnd: (result: Omit<GameResult, "personalBest" | "isNewBest">) => void;
   onHome: () => void;
 }) {
   const [selected, setSelected] = useState<number[]>([]);
   const selectedRef = useRef<number[]>([]);
-  const applySel = (next: number[]) => {
+  const applySel = useCallback((next: number[]) => {
     selectedRef.current = next;
     setSelected(next);
-  };
+  }, []);
 
   const [found, setFound] = useState<FoundWord[]>([]);
   const [score, setScore] = useState(0);
@@ -180,9 +217,15 @@ function PlayScreen({
 
   const endedRef = useRef(false);
   const foundRef = useRef<FoundWord[]>([]);
-  foundRef.current = found;
   const scoreRef = useRef(0);
-  scoreRef.current = score;
+
+  useEffect(() => {
+    foundRef.current = found;
+  }, [found]);
+
+  useEffect(() => {
+    scoreRef.current = score;
+  }, [score]);
 
   useEffect(() => {
     const t = setInterval(() => {
@@ -197,16 +240,19 @@ function PlayScreen({
   useEffect(() => {
     if (time === 0 && !endedRef.current) {
       endedRef.current = true;
-      setTimeout(() => onEnd({ score: scoreRef.current, found: foundRef.current }), 350);
+      const timeout = setTimeout(() => {
+        onEnd({ score: scoreRef.current, found: foundRef.current });
+      }, 350);
+      return () => clearTimeout(timeout);
     }
   }, [time, onEnd]);
 
-  const byId = (id: number) => tiles.find((t) => t.id === id);
+  const byId = useCallback((id: number) => tiles.find((t) => t.id === id), [tiles]);
 
-  const flashToast = (type: "good" | "bad", text: string) => {
+  const flashToast = useCallback((type: "good" | "bad", text: string) => {
     setToast({ type, text });
     setTimeout(() => setToast(null), 900);
-  };
+  }, []);
 
   const submit = useCallback(() => {
     const ids = selectedRef.current;
@@ -234,15 +280,14 @@ function PlayScreen({
     setFloatPts({ pts, key: Date.now() });
     setTimeout(() => setFloatPts(null), 900);
     applySel([]);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tiles]);
+  }, [applySel, byId, flashToast]);
 
   const tapTile = (id: number) => {
     const sel = selectedRef.current;
     applySel(sel.includes(id) ? sel.filter((x) => x !== id) : [...sel, id]);
   };
   const tapTray = (id: number) => applySel(selectedRef.current.filter((x) => x !== id));
-  const clearWord = () => applySel([]);
+  const clearWord = useCallback(() => applySel([]), [applySel]);
   const doShuffle = () => setTiles((ts) => shuffled([...ts]));
 
   useEffect(() => {
@@ -259,7 +304,7 @@ function PlayScreen({
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [tiles, submit]);
+  }, [applySel, clearWord, submit, tiles]);
 
   const warn = time <= 15;
   const mm = Math.floor(time / 60);

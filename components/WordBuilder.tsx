@@ -18,8 +18,12 @@ export function WordBuilder({ tiles, selected, onTrayTap, shake, goodFlash, toas
   const cls = ["builder", shake ? "shake" : "", goodFlash ? "good" : ""].filter(Boolean).join(" ");
 
   return (
-    <div className={cls}>
-      {toast && <div className={`toast ${toast.type}`}>{toast.text}</div>}
+    <div className={cls} aria-label="Current word">
+      {toast && (
+        <div className={`toast ${toast.type}`} role="status" aria-live="polite">
+          {toast.text}
+        </div>
+      )}
       {floatPts && (
         <div className="floatpts" key={floatPts.key}>
           +{floatPts.pts}
@@ -31,7 +35,14 @@ export function WordBuilder({ tiles, selected, onTrayTap, shake, goodFlash, toas
         selected.map((id) => {
           const tile = byId(id);
           return tile ? (
-            <LetterTile key={id} char={tile.char} kind="tray" mini onClick={() => onTrayTap(id)} />
+            <LetterTile
+              key={id}
+              char={tile.char}
+              kind="tray"
+              mini
+              onClick={() => onTrayTap(id)}
+              label={`Remove letter ${tile.char}`}
+            />
           ) : null;
         })
       )}

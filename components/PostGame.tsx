@@ -2,23 +2,30 @@
 
 import Image from "next/image";
 import { FoundWord } from "./FoundWords";
-import { scoreWord } from "@/lib/game";
+import { assetPath } from "@/lib/paths";
 
 interface PostGameProps {
   score: number;
   found: FoundWord[];
+  personalBest: number;
+  isNewBest: boolean;
   onPlayAgain: () => void;
   onHome: () => void;
+}
+
+function pseudoRandom(seed: number): number {
+  const x = Math.sin(seed) * 10000;
+  return x - Math.floor(x);
 }
 
 function Confetti() {
   const colors = ["#7b2ff7", "#b528c9", "#e0218a", "#ffd166", "#36d8a2"];
   const bits = Array.from({ length: 70 }, (_, i) => ({
-    left: Math.random() * 100,
-    delay: Math.random() * 0.6,
-    dur: 1.8 + Math.random() * 1.6,
+    left: pseudoRandom(i + 1) * 100,
+    delay: pseudoRandom(i + 101) * 0.6,
+    dur: 1.8 + pseudoRandom(i + 201) * 1.6,
     color: colors[i % colors.length],
-    rot: Math.random() * 360,
+    rot: pseudoRandom(i + 301) * 360,
   }));
   return (
     <div className="confetti">
@@ -38,7 +45,7 @@ function Confetti() {
   );
 }
 
-export function PostGame({ score, found, onPlayAgain, onHome }: PostGameProps) {
+export function PostGame({ score, found, personalBest, isNewBest, onPlayAgain, onHome }: PostGameProps) {
   const best = found.reduce<FoundWord | null>((a, b) => (!a || b.word.length > a.word.length ? b : a), null);
   const topScore = found.reduce<number>((max, f) => Math.max(max, f.pts), 0);
 
@@ -52,7 +59,7 @@ export function PostGame({ score, found, onPlayAgain, onHome }: PostGameProps) {
     <div className="stage results">
       {score >= 25 && <Confetti />}
       <Image
-        src="/scramples/logo.png"
+        src={assetPath("/logo.png")}
         alt="Scramples"
         width={480}
         height={100}
@@ -62,7 +69,9 @@ export function PostGame({ score, found, onPlayAgain, onHome }: PostGameProps) {
       <div className="result-title">{verdict}</div>
       <div className="scoreblock">
         <div className="bigscore">{score}</div>
-        <div className="bigscore-sub">points</div>
+        <div className="bigscore-sub">
+          points | {isNewBest ? "new best" : `${personalBest} best`}
+        </div>
       </div>
 
       <div className="result-stats">

@@ -19,6 +19,7 @@ export function LetterTiles({ tiles, selected, onTap }: LetterTilesProps) {
           used={selected.includes(t.id)}
           kind="rack"
           onClick={() => onTap(t.id)}
+          label={`Use letter ${t.char}`}
         />
       ))}
     </div>

@@ -20,6 +20,10 @@ export function shuffled<T>(arr: T[]): T[] {
   return a;
 }
 
+function sampleLetters(pool: string[], count: number): string[] {
+  return shuffled(pool).slice(0, count);
+}
+
 export function scoreWord(len: number): number {
   if (len <= 2) return 0;
   if (len === 3) return 1;
@@ -45,12 +49,11 @@ const VOWELS = new Set(["A", "E", "I", "O", "U"]);
 
 export function generateLetters(count = 9): string[] {
   for (let attempt = 0; attempt < 20; attempt++) {
-    const pool = [...LETTER_POOL].sort(() => Math.random() - 0.5);
-    const picked = pool.slice(0, count);
+    const picked = sampleLetters(LETTER_POOL, count);
     const vowelCount = picked.filter((l) => VOWELS.has(l)).length;
     if (vowelCount >= 3 && vowelCount <= 5) return picked;
   }
-  const vowelPool = LETTER_POOL.filter((l) => VOWELS.has(l)).sort(() => Math.random() - 0.5);
-  const consonantPool = LETTER_POOL.filter((l) => !VOWELS.has(l)).sort(() => Math.random() - 0.5);
-  return [...vowelPool.slice(0, 3), ...consonantPool.slice(0, count - 3)];
+  const vowelPool = LETTER_POOL.filter((l) => VOWELS.has(l));
+  const consonantPool = LETTER_POOL.filter((l) => !VOWELS.has(l));
+  return [...sampleLetters(vowelPool, 3), ...sampleLetters(consonantPool, count - 3)];
 }

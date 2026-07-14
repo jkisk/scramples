@@ -1,6 +1,7 @@
 "use client";
 
 import Image from "next/image";
+import { assetPath } from "@/lib/paths";
 
 interface HeaderProps {
   onHome: () => void;
@@ -27,19 +28,19 @@ const IconShuffle = () => (
 export function Header({ onHome, onShuffle }: HeaderProps) {
   return (
     <div className="topbar">
-      <button className="iconbtn" onClick={onHome} title="Home">
+      <button className="iconbtn" onClick={onHome} title="Home" aria-label="Home">
         <IconHome />
       </button>
       <Image
         className="brand-mini"
-        src="/scramples/logo.png"
+        src={assetPath("/logo.png")}
         alt="Scramples"
         width={200}
         height={60}
         style={{ height: 30, width: "auto" }}
         loading="eager"
       />
-      <button className="iconbtn" onClick={onShuffle} title="Shuffle">
+      <button className="iconbtn" onClick={onShuffle} title="Shuffle" aria-label="Shuffle letters">
         <IconShuffle />
       </button>
     </div>

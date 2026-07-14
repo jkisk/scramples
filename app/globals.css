@@ -124,6 +124,13 @@ body[data-theme="neon"] .brandLogo {
   gap: 10px;
 }
 .btn:active { transform: translateY(4px); box-shadow: var(--tile-lift-press); }
+.btn:focus-visible,
+.iconbtn:focus-visible,
+.theme-btn:focus-visible,
+.tile:focus-visible {
+  outline: 4px solid var(--accent);
+  outline-offset: 4px;
+}
 .btn.big { font-size: 26px; padding: 20px 52px; }
 .btn.ghost {
   background: var(--panel-bg);
@@ -249,7 +256,7 @@ body[data-theme="neon"] .card {
 .tile.rack { cursor: pointer; }
 .tile.rack:hover { transform: translateY(-3px); }
 .tile.rack:active { transform: translateY(2px); box-shadow: var(--tile-lift-press); }
-.tile.used { opacity: 0.32; transform: scale(0.9); box-shadow: none; pointer-events: none; }
+.tile.used { opacity: 0.32; transform: scale(0.9); box-shadow: none; pointer-events: none; cursor: not-allowed; }
 .tile.mini { width: 46px; height: 46px; font-size: 22px; border-radius: 11px; }
 .tile.tray { background: var(--grad); color: #fff; border-color: var(--tile-border); cursor: pointer; }
 
